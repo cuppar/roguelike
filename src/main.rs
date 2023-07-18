@@ -38,6 +38,10 @@ const COLOR_LIGHT_GROUND: Color = Color {
     b: 50,
 };
 
+const MAX_ROOM_MONSTERS: i32 = 3;
+
+const PLAYER: usize = 0;
+
 struct Tcod {
     root: Root,
     con: Offscreen,
@@ -45,36 +49,37 @@ struct Tcod {
 }
 
 /// return true to exit game
-fn handle_keys(tcod: &mut Tcod, game: &Game, player: &mut Object) -> bool {
+fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut [Object]) -> bool {
     use tcod::input::KeyCode::*;
     use tcod::input::*;
 
     let key: Key = tcod.root.wait_for_keypress(true);
+    let player = &mut objects[PLAYER];
     match key {
         Key {
             code: Char,
             printable: 'w',
             ..
-        } => player.move_by(0, -1, game),
+        } => Object::move_by(PLAYER, 0, -1, &game.map, objects),
         Key {
             code: Char,
             printable: 's',
             ..
-        } => player.move_by(0, 1, game),
+        } => Object::move_by(PLAYER, 0, 1, &game.map, objects),
         Key {
             code: Char,
             printable: 'a',
             ..
-        } => player.move_by(-1, 0, game),
+        } => Object::move_by(PLAYER, -1, 0, &game.map, objects),
         Key {
             code: Char,
             printable: 'd',
             ..
-        } => player.move_by(1, 0, game),
-        Key { code: Up, .. } => player.move_by(0, -1, game),
-        Key { code: Down, .. } => player.move_by(0, 1, game),
-        Key { code: Left, .. } => player.move_by(-1, 0, game),
-        Key { code: Right, .. } => player.move_by(1, 0, game),
+        } => Object::move_by(PLAYER, 1, 0, &game.map, objects),
+        Key { code: Up, .. } => Object::move_by(PLAYER, 0, -1, &game.map, objects),
+        Key { code: Down, .. } => Object::move_by(PLAYER, 0, 1, &game.map, objects),
+        Key { code: Left, .. } => Object::move_by(PLAYER, -1, 0, &game.map, objects),
+        Key { code: Right, .. } => Object::move_by(PLAYER, 1, 0, &game.map, objects),
         Key {
             code: Enter,
             ctrl: true,
@@ -95,48 +100,67 @@ struct Object {
     y: i32,
     char: char,
     color: Color,
+    name: String,
+    blocks: bool,
+    alive: bool,
 }
 
 impl Object {
-    pub fn new(x: i32, y: i32, char: char, color: Color) -> Self {
-        Object { x, y, char, color }
+    pub fn new(x: i32, y: i32, char: char, name: &str, color: Color, blocks: bool) -> Self {
+        Object {
+            x,
+            y,
+            char,
+            color,
+            blocks,
+            name: name.into(),
+            alive: false,
+        }
     }
 
-    pub fn move_by(&mut self, dx: i32, dy: i32, game: &Game) {
-        let new_x = self.x + dx;
-        let new_y = self.y + dy;
+    pub fn move_by(index: usize, dx: i32, dy: i32, map: &Map, objects: &mut [Object]) {
+        let new_x = objects[index].x + dx;
+        let new_y = objects[index].y + dy;
         if new_x >= MAP_WIDTH || new_x < 0 || new_y >= MAP_HEIGHT || new_y < 0 {
             return;
         }
 
-        if game.map[new_x as usize][new_y as usize].blocked {
-            return;
+        if !is_blocked(new_x, new_y, map, objects) {
+            objects[index].set_pos(new_x, new_y);
         }
-        self.x = new_x;
-        self.y = new_y;
     }
 
     pub fn draw(&self, con: &mut dyn Console) {
         con.set_default_foreground(self.color);
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
     }
+    pub fn pos(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
+    pub fn set_pos(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 struct Tile {
     blocked: bool,
+    explored: bool,
     block_sight: bool,
 }
 impl Tile {
     pub fn empty() -> Self {
         Tile {
             blocked: false,
+            explored: false,
             block_sight: false,
         }
     }
     pub fn wall() -> Self {
         Tile {
             blocked: true,
+            explored: false,
             block_sight: true,
         }
     }
@@ -148,7 +172,7 @@ struct Game {
     map: Map,
 }
 
-fn make_map(player: &mut Object) -> Map {
+fn make_map(objects: &mut Vec<Object>) -> Map {
     let mut map = vec![vec![Tile::wall(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
 
     let mut rooms = vec![];
@@ -165,9 +189,9 @@ fn make_map(player: &mut Object) -> Map {
         if !failed {
             create_room(new_room, &mut map);
             let (new_x, new_y) = new_room.center();
+
             if rooms.is_empty() {
-                player.x = new_x;
-                player.y = new_y;
+                objects[PLAYER].set_pos(new_x, new_y);
             } else {
                 let (prev_x, prev_y) = rooms[rooms.len() - 1].center();
                 if rand::random() {
@@ -177,6 +201,7 @@ fn make_map(player: &mut Object) -> Map {
                     create_v_tunnel(prev_y, new_y, prev_x, &mut map);
                     create_h_tunnel(prev_x, new_x, new_y, &mut map);
                 }
+                place_objects(new_room, &map, objects);
             }
             rooms.push(new_room);
         }
@@ -185,9 +210,9 @@ fn make_map(player: &mut Object) -> Map {
     map
 }
 
-fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object], fov_recompute: bool) {
+fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
     if fov_recompute {
-        let player = &objects[0];
+        let player = &objects[PLAYER];
         tcod.fov
             .compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
     }
@@ -206,8 +231,14 @@ fn render_all(tcod: &mut Tcod, game: &Game, objects: &[Object], fov_recompute: b
                 (true, true) => COLOR_LIGHT_WALL,
                 (true, false) => COLOR_LIGHT_GROUND,
             };
-            tcod.con
-                .set_char_background(x, y, color, BackgroundFlag::Set);
+            let explored = &mut game.map[x as usize][y as usize].explored;
+            if visible {
+                *explored = true;
+            }
+            if *explored {
+                tcod.con
+                    .set_char_background(x, y, color, BackgroundFlag::Set);
+            }
         }
     }
     blit(
@@ -276,13 +307,37 @@ fn create_v_tunnel(y1: i32, y2: i32, x: i32, map: &mut Map) {
     }
 }
 
+fn place_objects(room: Rect, map: &Map, objects: &mut Vec<Object>) {
+    let num_monsters = rand::thread_rng().gen_range(0..=MAX_ROOM_MONSTERS);
+    for _ in 0..num_monsters {
+        let x = rand::thread_rng().gen_range((room.x1 + 1)..room.x2);
+        let y = rand::thread_rng().gen_range((room.y1 + 1)..room.y2);
+
+        if !is_blocked(x, y, map, objects) {
+            let mut monster = if rand::random::<f32>() < 0.8 {
+                Object::new(x, y, 'o', "orc", DESATURATED_GREEN, true)
+            } else {
+                Object::new(x, y, 'T', "Troll", DARKER_GREEN, true)
+            };
+
+            monster.alive = true;
+            objects.push(monster);
+        }
+    }
+}
+
+fn is_blocked(x: i32, y: i32, map: &Map, objects: &[Object]) -> bool {
+    if map[x as usize][y as usize].blocked {
+        return true;
+    }
+    objects.iter().any(|o| o.blocks && o.pos() == (x, y))
+}
 fn main() {
     // objects and maps settings
-    let player = Object::new(0, 0, '@', WHITE);
-    let npc = Object::new(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', YELLOW);
-    let mut objects = [player, npc];
-    let game = Game {
-        map: make_map(&mut objects[0]),
+    let player = Object::new(0, 0, '@', "Cuppar", WHITE, true);
+    let mut objects = vec![player];
+    let mut game = Game {
+        map: make_map(&mut objects),
     };
 
     // console settings
@@ -320,15 +375,15 @@ fn main() {
         tcod.con.clear();
 
         // render
-        let fov_recompute = previous_player_position != (objects[0].x, objects[0].y);
-        render_all(&mut tcod, &game, &objects, fov_recompute);
+        let fov_recompute = previous_player_position != objects[PLAYER].pos();
+        render_all(&mut tcod, &mut game, &objects, fov_recompute);
         tcod.root.flush();
 
-        let player = &mut objects[0];
-        previous_player_position = (player.x, player.y);
+        let player = &mut objects[PLAYER];
+        previous_player_position = player.pos();
 
         // handle user input
-        let exit = handle_keys(&mut tcod, &game, player);
+        let exit = handle_keys(&mut tcod, &game, &mut objects);
         if exit {
             break;
         }
