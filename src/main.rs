@@ -5,11 +5,11 @@ use tcod::map::{FovAlgorithm, Map as FovMap};
 use tcod::colors::*;
 use tcod::console::*;
 
-const SCREEN_WIDTH: i32 = 180;
-const SCREEN_HEIGHT: i32 = 120;
+const SCREEN_WIDTH: i32 = 100;
+const SCREEN_HEIGHT: i32 = 80;
 
-const MAP_WIDTH: i32 = 180;
-const MAP_HEIGHT: i32 = 115;
+const MAP_WIDTH: i32 = 100;
+const MAP_HEIGHT: i32 = 75;
 
 const LIMIT_FPS: i32 = 20;
 
@@ -49,49 +49,94 @@ struct Tcod {
 }
 
 /// return true to exit game
-fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut [Object]) -> bool {
+fn handle_keys(tcod: &mut Tcod, game: &Game, objects: &mut [Object]) -> PlayerAction {
     use tcod::input::KeyCode::*;
     use tcod::input::*;
+    use PlayerAction::*;
 
     let key: Key = tcod.root.wait_for_keypress(true);
-    let player = &mut objects[PLAYER];
-    match key {
-        Key {
-            code: Char,
-            printable: 'w',
-            ..
-        } => Object::move_by(PLAYER, 0, -1, &game.map, objects),
-        Key {
-            code: Char,
-            printable: 's',
-            ..
-        } => Object::move_by(PLAYER, 0, 1, &game.map, objects),
-        Key {
-            code: Char,
-            printable: 'a',
-            ..
-        } => Object::move_by(PLAYER, -1, 0, &game.map, objects),
-        Key {
-            code: Char,
-            printable: 'd',
-            ..
-        } => Object::move_by(PLAYER, 1, 0, &game.map, objects),
-        Key { code: Up, .. } => Object::move_by(PLAYER, 0, -1, &game.map, objects),
-        Key { code: Down, .. } => Object::move_by(PLAYER, 0, 1, &game.map, objects),
-        Key { code: Left, .. } => Object::move_by(PLAYER, -1, 0, &game.map, objects),
-        Key { code: Right, .. } => Object::move_by(PLAYER, 1, 0, &game.map, objects),
-        Key {
-            code: Enter,
-            ctrl: true,
-            ..
-        } => {
+    let player_alive = objects[PLAYER].alive;
+
+    match (key, key.text(), player_alive) {
+        (
+            Key {
+                code: Char,
+                printable: 'w',
+                ..
+            },
+            _,
+            true,
+        ) => {
+            player_move_or_attack(0, -1, game, objects);
+            TookTurn
+        }
+        (
+            Key {
+                code: Char,
+                printable: 's',
+                ..
+            },
+            _,
+            true,
+        ) => {
+            player_move_or_attack(0, 1, game, objects);
+            TookTurn
+        }
+        (
+            Key {
+                code: Char,
+                printable: 'a',
+                ..
+            },
+            _,
+            true,
+        ) => {
+            player_move_or_attack(-1, 0, game, objects);
+            TookTurn
+        }
+        (
+            Key {
+                code: Char,
+                printable: 'd',
+                ..
+            },
+            _,
+            true,
+        ) => {
+            player_move_or_attack(1, 0, game, objects);
+            TookTurn
+        }
+        (Key { code: Up, .. }, _, true) => {
+            player_move_or_attack(0, -1, game, objects);
+            TookTurn
+        }
+        (Key { code: Down, .. }, _, true) => {
+            player_move_or_attack(0, 1, game, objects);
+            TookTurn
+        }
+        (Key { code: Left, .. }, _, true) => {
+            player_move_or_attack(-1, 0, game, objects);
+            TookTurn
+        }
+        (Key { code: Right, .. }, _, true) => {
+            player_move_or_attack(1, 0, game, objects);
+            TookTurn
+        }
+        (
+            Key {
+                code: Enter,
+                ctrl: true,
+                ..
+            },
+            ..,
+        ) => {
             let fullscreen = tcod.root.is_fullscreen();
             tcod.root.set_fullscreen(!fullscreen);
+            DidntTakeTurn
         }
-        Key { code: Escape, .. } => return true,
-        _ => {}
+        (Key { code: Escape, .. }, ..) => Exit,
+        _ => DidntTakeTurn,
     }
-    false
 }
 
 #[derive(Debug)]
@@ -332,9 +377,36 @@ fn is_blocked(x: i32, y: i32, map: &Map, objects: &[Object]) -> bool {
     }
     objects.iter().any(|o| o.blocks && o.pos() == (x, y))
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PlayerAction {
+    TookTurn,
+    DidntTakeTurn,
+    Exit,
+}
+
+fn player_move_or_attack(dx: i32, dy: i32, game: &Game, objects: &mut [Object]) {
+    let x = objects[PLAYER].x + dx;
+    let y = objects[PLAYER].y + dy;
+
+    let target_id = objects.iter().position(|o| o.pos() == (x, y));
+    match target_id {
+        Some(target_id) => {
+            println!(
+                "The {} laughs at your puny efforts to attack him!",
+                objects[target_id].name
+            );
+        }
+        None => {
+            Object::move_by(PLAYER, dx, dy, &game.map, objects);
+        }
+    }
+}
+
 fn main() {
     // objects and maps settings
-    let player = Object::new(0, 0, '@', "Cuppar", WHITE, true);
+    let mut player = Object::new(0, 0, '@', "Cuppar", WHITE, true);
+    player.alive = true;
     let mut objects = vec![player];
     let mut game = Game {
         map: make_map(&mut objects),
@@ -379,13 +451,20 @@ fn main() {
         render_all(&mut tcod, &mut game, &objects, fov_recompute);
         tcod.root.flush();
 
-        let player = &mut objects[PLAYER];
-        previous_player_position = player.pos();
+        previous_player_position = objects[PLAYER].pos();
 
         // handle user input
-        let exit = handle_keys(&mut tcod, &game, &mut objects);
-        if exit {
+        let player_action = handle_keys(&mut tcod, &game, &mut objects);
+        if player_action == PlayerAction::Exit {
             break;
+        }
+
+        if objects[PLAYER].alive && player_action != PlayerAction::DidntTakeTurn {
+            for object in &objects {
+                if (object as *const _) != (&objects[PLAYER] as *const _) {
+                    // println!("The {} growls!", object.name);
+                }
+            }
         }
     }
 }
