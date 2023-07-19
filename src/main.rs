@@ -70,14 +70,15 @@ fn main() {
 
     // main loop
     while !tcod.root.window_closed() {
+        // This function has bug?
+        // match input::check_for_event(input::MOUSE | input::KEY_PRESS) {
+        //     Some((_, Event::Mouse(m))) => tcod.mouse = m,
+        //     Some((_, Event::Key(k))) => tcod.key = k,
+        //     _ => tcod.key = Default::default(),
+        // }
+
         // clear prev frame
         tcod.con.clear();
-
-        match input::check_for_event(input::MOUSE | input::KEY_PRESS) {
-            Some((_, Event::Mouse(m))) => tcod.mouse = m,
-            Some((_, Event::Key(k))) => tcod.key = k,
-            _ => tcod.key = Default::default(),
-        }
 
         // render
         let fov_recompute = previous_player_position != objects[PLAYER].pos();
