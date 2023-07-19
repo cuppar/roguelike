@@ -1,8 +1,10 @@
 use tcod::colors::BLACK;
 use tcod::colors::DARKER_RED;
+use tcod::colors::LIGHT_GREY;
 use tcod::colors::LIGHT_RED;
 use tcod::colors::WHITE;
 use tcod::console::*;
+use tcod::input::{Key, Mouse};
 use tcod::map::Map as FovMap;
 use tcod::Color;
 
@@ -26,6 +28,8 @@ pub struct Tcod {
     pub con: Offscreen,
     pub panel: Offscreen,
     pub fov: FovMap,
+    pub key: Key,
+    pub mouse: Mouse,
 }
 pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
     if fov_recompute {
@@ -100,6 +104,14 @@ pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_reco
         tcod.panel.set_default_foreground(color);
         tcod.panel.print_rect(MSG_X, y, MSG_WIDTH, 0, msg);
     }
+    tcod.panel.set_default_foreground(LIGHT_GREY);
+    tcod.panel.print_ex(
+        1,
+        0,
+        BackgroundFlag::None,
+        TextAlignment::Left,
+        get_names_under_mouse(tcod.mouse, objects, &tcod.fov),
+    );
     blit(
         &tcod.panel,
         (0, 0),
@@ -156,4 +168,16 @@ impl Messages {
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = &(String, Color)> {
         self.messages.iter()
     }
+}
+
+fn get_names_under_mouse(mouse: Mouse, objects: &[Object], fov_map: &FovMap) -> String {
+    let (x, y) = (mouse.cx as i32, mouse.cy as i32);
+
+    let names = objects
+        .iter()
+        .filter(|o| o.pos() == (x, y) && fov_map.is_in_fov(x, y))
+        .map(|o| o.name.clone())
+        .collect::<Vec<_>>();
+
+    names.join(", ")
 }

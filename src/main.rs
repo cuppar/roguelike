@@ -1,6 +1,7 @@
 // 3party
 use tcod::colors::*;
 use tcod::console::*;
+use tcod::input::{self, Event};
 use tcod::map::Map as FovMap;
 
 // own module
@@ -46,6 +47,8 @@ fn main() {
         con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT),
         panel: Offscreen::new(SCREEN_WIDTH, PANEL_HEIGHT),
         fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT),
+        key: Default::default(),
+        mouse: Default::default(),
     };
     tcod::system::set_fps(LIMIT_FPS);
 
@@ -69,6 +72,12 @@ fn main() {
     while !tcod.root.window_closed() {
         // clear prev frame
         tcod.con.clear();
+
+        match input::check_for_event(input::MOUSE | input::KEY_PRESS) {
+            Some((_, Event::Mouse(m))) => tcod.mouse = m,
+            Some((_, Event::Key(k))) => tcod.key = k,
+            _ => tcod.key = Default::default(),
+        }
 
         // render
         let fov_recompute = previous_player_position != objects[PLAYER].pos();
