@@ -8,8 +8,8 @@ use super::object::*;
 
 pub const MAX_ROOM_MONSTERS: i32 = 3;
 
-pub const MAP_WIDTH: i32 = 100;
-pub const MAP_HEIGHT: i32 = 75;
+pub const MAP_WIDTH: i32 = 80;
+pub const MAP_HEIGHT: i32 = 43;
 
 pub type Map = Vec<Vec<Tile>>;
 

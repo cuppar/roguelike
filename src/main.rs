@@ -12,8 +12,8 @@ use game::object::*;
 use game::render::*;
 use game::*;
 
-const SCREEN_WIDTH: i32 = 100;
-const SCREEN_HEIGHT: i32 = 80;
+const SCREEN_WIDTH: i32 = 80;
+const SCREEN_HEIGHT: i32 = 50;
 
 const LIMIT_FPS: i32 = 20;
 
@@ -31,6 +31,7 @@ fn main() {
     let mut objects = vec![player];
     let mut game = Game {
         map: make_map(&mut objects),
+        messages: Messages::new(),
     };
 
     // console settings
@@ -43,6 +44,7 @@ fn main() {
     let mut tcod = Tcod {
         root,
         con: Offscreen::new(MAP_WIDTH, MAP_HEIGHT),
+        panel: Offscreen::new(SCREEN_WIDTH, PANEL_HEIGHT),
         fov: FovMap::new(MAP_WIDTH, MAP_HEIGHT),
     };
     tcod::system::set_fps(LIMIT_FPS);
@@ -61,6 +63,7 @@ fn main() {
     }
 
     let mut previous_player_position = (-1, -1);
+    game.messages.add("Welcome!", RED);
 
     // main loop
     while !tcod.root.window_closed() {
@@ -75,7 +78,7 @@ fn main() {
         previous_player_position = objects[PLAYER].pos();
 
         // handle user input
-        let player_action = handle_keys(&mut tcod, &game, &mut objects);
+        let player_action = handle_keys(&mut tcod, &mut game, &mut objects);
         if player_action == PlayerAction::Exit {
             break;
         }
@@ -84,7 +87,7 @@ fn main() {
             for id in 0..objects.len() {
                 // monster turn
                 if objects[id].ai.is_some() {
-                    ai_take_turn(id, &tcod, &game, &mut objects);
+                    ai_take_turn(id, &tcod, &mut game, &mut objects);
                 }
             }
         }

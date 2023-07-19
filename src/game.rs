@@ -5,8 +5,11 @@ pub mod render;
 
 use map::Map;
 
+use self::render::Messages;
+
 pub struct Game {
     pub map: Map,
+    pub messages: Messages,
 }
 
 pub fn mut_two<T>(first_index: usize, second_index: usize, items: &mut [T]) -> (&mut T, &mut T) {

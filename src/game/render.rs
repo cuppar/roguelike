@@ -1,16 +1,30 @@
+use tcod::colors::BLACK;
+use tcod::colors::DARKER_RED;
+use tcod::colors::LIGHT_RED;
 use tcod::colors::WHITE;
 use tcod::console::*;
 use tcod::map::Map as FovMap;
+use tcod::Color;
 
 use crate::SCREEN_HEIGHT;
+use crate::SCREEN_WIDTH;
 
 use super::map::*;
 use super::object::*;
 use super::*;
 
+pub const BAR_WIDTH: i32 = 20;
+pub const PANEL_HEIGHT: i32 = 7;
+pub const PANEL_Y: i32 = SCREEN_HEIGHT - PANEL_HEIGHT;
+
+pub const MSG_X: i32 = BAR_WIDTH + 2;
+pub const MSG_WIDTH: i32 = SCREEN_WIDTH - BAR_WIDTH - 2;
+pub const MSG_HEIGHT: usize = PANEL_HEIGHT as usize - 1;
+
 pub struct Tcod {
     pub root: Root,
     pub con: Offscreen,
+    pub panel: Offscreen,
     pub fov: FovMap,
 }
 pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
@@ -58,14 +72,88 @@ pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_reco
         1.0,
         1.0,
     );
-    tcod.root.set_default_foreground(WHITE);
-    if let Some(fighter) = objects[PLAYER].fighter {
-        tcod.root.print_ex(
-            1,
-            SCREEN_HEIGHT - 2,
-            BackgroundFlag::None,
-            TextAlignment::Left,
-            format!("HP: {}/{}", fighter.hp, fighter.max_hp),
-        );
+
+    // show bottom panel
+    tcod.panel.set_default_background(BLACK);
+    tcod.panel.clear();
+
+    let hp = objects[PLAYER].fighter.map_or(0, |f| f.hp);
+    let max_hp = objects[PLAYER].fighter.map_or(0, |f| f.max_hp);
+    render_bar(
+        &mut tcod.panel,
+        1,
+        1,
+        BAR_WIDTH,
+        "HP",
+        hp,
+        max_hp,
+        LIGHT_RED,
+        DARKER_RED,
+    );
+    let mut y = MSG_HEIGHT as i32;
+    for &(ref msg, color) in game.messages.iter().rev() {
+        let msg_height = tcod.panel.get_height_rect(MSG_X, y, MSG_WIDTH, 0, msg);
+        y -= msg_height;
+        if y < 0 {
+            break;
+        }
+        tcod.panel.set_default_foreground(color);
+        tcod.panel.print_rect(MSG_X, y, MSG_WIDTH, 0, msg);
+    }
+    blit(
+        &tcod.panel,
+        (0, 0),
+        (SCREEN_WIDTH, PANEL_HEIGHT),
+        &mut tcod.root,
+        (0, PANEL_Y),
+        1.0,
+        1.0,
+    );
+}
+fn render_bar(
+    panel: &mut Offscreen,
+    x: i32,
+    y: i32,
+    total_width: i32,
+    name: &str,
+    value: i32,
+    maximum: i32,
+    bar_color: Color,
+    back_color: Color,
+) {
+    let bar_width = (value as f32 / maximum as f32 * total_width as f32) as i32;
+    panel.set_default_background(back_color);
+    panel.rect(x, y, total_width, 1, false, BackgroundFlag::Screen);
+
+    panel.set_default_background(bar_color);
+    if bar_width > 0 {
+        panel.rect(x, y, bar_width, 1, false, BackgroundFlag::Screen);
+    }
+    panel.set_default_foreground(WHITE);
+    panel.print_ex(
+        x + total_width / 2,
+        y,
+        BackgroundFlag::None,
+        TextAlignment::Center,
+        &format!("{} {}/{}", name, value, maximum),
+    );
+}
+
+pub struct Messages {
+    messages: Vec<(String, Color)>,
+}
+
+impl Messages {
+    pub fn new() -> Self {
+        Self { messages: vec![] }
+    }
+    pub fn add<T>(&mut self, message: T, color: Color)
+    where
+        T: Into<String>,
+    {
+        self.messages.push((message.into(), color));
+    }
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &(String, Color)> {
+        self.messages.iter()
     }
 }
