@@ -20,6 +20,13 @@ const LIMIT_FPS: i32 = 20;
 fn main() {
     // objects and maps settings
     let mut player = Object::new(0, 0, '@', "Cuppar", WHITE, true);
+    player.fighter = Some(Fighter {
+        max_hp: 30,
+        hp: 30,
+        defense: 2,
+        power: 5,
+        on_death: DeathCallback::Player,
+    });
     player.alive = true;
     let mut objects = vec![player];
     let mut game = Game {
@@ -74,9 +81,10 @@ fn main() {
         }
 
         if objects[PLAYER].alive && player_action != PlayerAction::DidntTakeTurn {
-            for object in &objects {
-                if (object as *const _) != (&objects[PLAYER] as *const _) {
-                    // println!("The {} growls!", object.name);
+            for id in 0..objects.len() {
+                // monster turn
+                if objects[id].ai.is_some() {
+                    ai_take_turn(id, &tcod, &game, &mut objects);
                 }
             }
         }

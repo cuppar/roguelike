@@ -1,5 +1,8 @@
+use tcod::colors::WHITE;
 use tcod::console::*;
 use tcod::map::Map as FovMap;
+
+use crate::SCREEN_HEIGHT;
 
 use super::map::*;
 use super::object::*;
@@ -16,7 +19,12 @@ pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_reco
         tcod.fov
             .compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
     }
-    for object in objects {
+    let mut to_draw: Vec<_> = objects
+        .iter()
+        .filter(|o| tcod.fov.is_in_fov(o.x, o.y))
+        .collect();
+    to_draw.sort_by(|a, b| a.blocks.cmp(&b.blocks));
+    for object in to_draw {
         if tcod.fov.is_in_fov(object.x, object.y) {
             object.draw(&mut tcod.con);
         }
@@ -50,4 +58,14 @@ pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_reco
         1.0,
         1.0,
     );
+    tcod.root.set_default_foreground(WHITE);
+    if let Some(fighter) = objects[PLAYER].fighter {
+        tcod.root.print_ex(
+            1,
+            SCREEN_HEIGHT - 2,
+            BackgroundFlag::None,
+            TextAlignment::Left,
+            format!("HP: {}/{}", fighter.hp, fighter.max_hp),
+        );
+    }
 }
