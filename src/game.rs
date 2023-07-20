@@ -2,14 +2,16 @@ pub mod input;
 pub mod map;
 pub mod object;
 pub mod render;
+pub mod ui;
 
 use map::Map;
 
-use self::render::Messages;
+use self::{render::Messages, object::Object};
 
 pub struct Game {
     pub map: Map,
     pub messages: Messages,
+    pub inventory: Vec<Object>,
 }
 
 pub fn mut_two<T>(first_index: usize, second_index: usize, items: &mut [T]) -> (&mut T, &mut T) {

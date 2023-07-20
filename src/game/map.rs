@@ -3,19 +3,23 @@ use rand::Rng;
 use tcod::colors::*;
 use tcod::map::FovAlgorithm;
 
+use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
+
 // own modules
-use super::object::*;
+use super::{object::*, render::PANEL_HEIGHT};
 
 pub const MAX_ROOM_MONSTERS: i32 = 3;
 
-pub const MAP_WIDTH: i32 = 80;
-pub const MAP_HEIGHT: i32 = 43;
+pub const MAP_WIDTH: i32 = SCREEN_WIDTH;
+pub const MAP_HEIGHT: i32 = SCREEN_HEIGHT - PANEL_HEIGHT;
 
 pub type Map = Vec<Vec<Tile>>;
 
 pub const ROOM_MAX_SIZE: i32 = 12;
 pub const ROOM_MIN_SIZE: i32 = 8;
 pub const MAX_ROOMS: i32 = 100;
+
+pub const MAX_ROOM_ITEMS: i32 = 2;
 
 pub const FOV_ALGO: FovAlgorithm = FovAlgorithm::Basic;
 pub const FOV_LIGHT_WALLS: bool = true;
@@ -184,6 +188,17 @@ pub fn place_objects(room: Rect, map: &Map, objects: &mut Vec<Object>) {
 
             monster.alive = true;
             objects.push(monster);
+        }
+    }
+    let num_items = rand::thread_rng().gen_range(0..=MAX_ROOM_ITEMS);
+    for _ in 0..num_items {
+        let x = rand::thread_rng().gen_range((room.x1 + 1)..room.x2);
+        let y = rand::thread_rng().gen_range((room.y1 + 1)..room.y2);
+
+        if !is_blocked(x, y, map, objects) {
+            let mut item = Object::new(x, y, '!', "healing potion", VIOLET, false);
+            item.item = Some(Item::Heal);
+            objects.push(item);
         }
     }
 }

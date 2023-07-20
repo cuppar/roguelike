@@ -5,9 +5,12 @@ use tcod::console::*;
 // own module
 use super::map::*;
 use super::render::*;
+use super::ui::menu;
+use super::ui::INVENTORY_WIDTH;
 use super::*;
 
 pub const PLAYER: usize = 0;
+pub const HEAL_AMOUNT: i32 = 4;
 
 pub fn player_move_or_attack(dx: i32, dy: i32, game: &mut Game, objects: &mut [Object]) {
     let x = objects[PLAYER].x + dx;
@@ -84,6 +87,7 @@ pub struct Object {
     pub alive: bool,
     pub fighter: Option<Fighter>,
     pub ai: Option<Ai>,
+    pub item: Option<Item>,
 }
 
 impl Object {
@@ -98,6 +102,7 @@ impl Object {
             alive: false,
             fighter: None,
             ai: None,
+            item: None,
         }
     }
 
@@ -160,6 +165,14 @@ impl Object {
             );
         }
     }
+    pub fn heal(&mut self, amount: i32) {
+        if let Some(ref mut fighter) = self.fighter {
+            fighter.hp += amount;
+            if fighter.hp > fighter.max_hp {
+                fighter.hp = fighter.max_hp;
+            }
+        }
+    }
 }
 
 pub fn move_towards(id: usize, target_x: i32, target_y: i32, map: &Map, objects: &mut [Object]) {
@@ -182,4 +195,88 @@ pub fn ai_take_turn(monster_id: usize, tcod: &Tcod, game: &mut Game, objects: &m
             monster.attack(player, game);
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Item {
+    Heal,
+}
+
+pub fn pick_item_up(object_id: usize, game: &mut Game, objects: &mut Vec<Object>) {
+    if game.inventory.len() >= 26 {
+        game.messages.add(
+            format!(
+                "Your inventory is full, cannot pick up {}.",
+                objects[object_id].name
+            ),
+            RED,
+        );
+    } else {
+        let item = objects.swap_remove(object_id);
+        game.messages
+            .add(format!("You picked up a {}!", item.name), GREEN);
+        game.inventory.push(item);
+    }
+}
+
+pub fn inventory_menu(inventory: &[Object], header: &str, root: &mut Root) -> Option<usize> {
+    let options = if inventory.len() == 0 {
+        vec!["Inventory is empty.".into()]
+    } else {
+        inventory.iter().map(|i| i.name.clone()).collect()
+    };
+
+    let inventory_index = menu(header, &options, INVENTORY_WIDTH, root);
+    if inventory.len() > 0 {
+        inventory_index
+    } else {
+        None
+    }
+}
+
+pub fn use_item(inventory_id: usize, tcod: &mut Tcod, game: &mut Game, objects: &mut [Object]) {
+    use Item::*;
+    if let Some(item) = game.inventory[inventory_id].item {
+        let on_use = match item {
+            Heal => cast_heal,
+        };
+        match on_use(inventory_id, tcod, game, objects) {
+            UseResult::UsedUp => {
+                game.inventory.remove(inventory_id);
+            }
+            UseResult::Cancelled => {
+                game.messages.add(format!("Cancelled"), WHITE);
+            }
+        }
+    } else {
+        game.messages.add(
+            format!("The {} cannot be used.", game.inventory[inventory_id].name),
+            WHITE,
+        );
+    }
+}
+
+enum UseResult {
+    UsedUp,
+    Cancelled,
+}
+
+fn cast_heal(
+    _inventory_id: usize,
+    _tcod: &mut Tcod,
+    game: &mut Game,
+    objects: &mut [Object],
+) -> UseResult {
+    if let Some(fighter) = objects[PLAYER].fighter {
+        if fighter.hp == fighter.max_hp {
+            game.messages
+                .add(format!("You are alreadly at full health."), RED);
+            return UseResult::Cancelled;
+        }
+        game.messages
+            .add(format!("You wounds start to feel better!"), LIGHT_VIOLET);
+        objects[PLAYER].heal(HEAL_AMOUNT);
+        return UseResult::UsedUp;
+    }
+    UseResult::Cancelled
 }
