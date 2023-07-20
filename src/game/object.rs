@@ -245,7 +245,7 @@ pub fn use_item(inventory_id: usize, tcod: &mut Tcod, game: &mut Game, objects: 
                 game.inventory.remove(inventory_id);
             }
             UseResult::Cancelled => {
-                game.messages.add(format!("Cancelled"), WHITE);
+                game.messages.add("Cancelled".to_string(), WHITE);
             }
         }
     } else {
@@ -270,11 +270,11 @@ fn cast_heal(
     if let Some(fighter) = objects[PLAYER].fighter {
         if fighter.hp == fighter.max_hp {
             game.messages
-                .add(format!("You are alreadly at full health."), RED);
+                .add("You are alreadly at full health.".to_string(), RED);
             return UseResult::Cancelled;
         }
         game.messages
-            .add(format!("You wounds start to feel better!"), LIGHT_VIOLET);
+            .add("You wounds start to feel better!".to_string(), LIGHT_VIOLET);
         objects[PLAYER].heal(HEAL_AMOUNT);
         return UseResult::UsedUp;
     }
