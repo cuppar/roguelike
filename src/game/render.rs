@@ -122,6 +122,7 @@ pub fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_reco
         1.0,
     );
 }
+#[allow(clippy::too_many_arguments)]
 fn render_bar(
     panel: &mut Offscreen,
     x: i32,

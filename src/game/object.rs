@@ -109,7 +109,7 @@ impl Object {
     pub fn move_by(index: usize, dx: i32, dy: i32, map: &Map, objects: &mut [Object]) {
         let new_x = objects[index].x + dx;
         let new_y = objects[index].y + dy;
-        if new_x >= MAP_WIDTH || new_x < 0 || new_y >= MAP_HEIGHT || new_y < 0 {
+        if !(0..MAP_WIDTH).contains(&new_x) || !(0..MAP_HEIGHT).contains(&new_y) {
             return;
         }
 
@@ -220,14 +220,14 @@ pub fn pick_item_up(object_id: usize, game: &mut Game, objects: &mut Vec<Object>
 }
 
 pub fn inventory_menu(inventory: &[Object], header: &str, root: &mut Root) -> Option<usize> {
-    let options = if inventory.len() == 0 {
+    let options = if inventory.is_empty() {
         vec!["Inventory is empty.".into()]
     } else {
         inventory.iter().map(|i| i.name.clone()).collect()
     };
 
     let inventory_index = menu(header, &options, INVENTORY_WIDTH, root);
-    if inventory.len() > 0 {
+    if !inventory.is_empty() {
         inventory_index
     } else {
         None

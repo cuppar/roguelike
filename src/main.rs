@@ -107,7 +107,7 @@ fn main() {
                 if player_action == PlayerAction::Replay {
                     break;
                 } else {
-                    game.messages.add(format!("replay? (y/esc)"), RED);
+                    game.messages.add("replay? (y/esc)".to_string(), RED);
                 }
             }
         }
