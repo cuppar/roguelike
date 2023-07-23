@@ -1,3 +1,4 @@
+use rand::Rng;
 // 3party
 use tcod::colors::*;
 use tcod::console::*;
@@ -13,6 +14,8 @@ pub const PLAYER: usize = 0;
 pub const HEAL_AMOUNT: i32 = 4;
 pub const LIGHTNING_DAMAGE: i32 = 40;
 pub const LIGHTNING_RANGE: i32 = 5;
+pub const CONFUSE_RANGE: i32 = 8;
+pub const CONFUSE_NUM_TURNS: i32 = 10;
 
 pub fn player_move_or_attack(dx: i32, dy: i32, game: &mut Game, objects: &mut [Object]) {
     let x = objects[PLAYER].x + dx;
@@ -220,18 +223,37 @@ fn ai_basic(monster_id: usize, tcod: &Tcod, game: &mut Game, objects: &mut [Obje
 
 fn ai_confused(
     monster_id: usize,
-    tcod: &Tcod,
+    _tcod: &Tcod,
     game: &mut Game,
     objects: &mut [Object],
     previous_ai: Box<Ai>,
     num_turns: i32,
 ) -> Ai {
-    Ai::Basic
+    if num_turns > 0 {
+        Object::move_by(
+            monster_id,
+            rand::thread_rng().gen_range(-1..=1),
+            rand::thread_rng().gen_range(-1..=1),
+            &game.map,
+            objects,
+        );
+        Ai::Confused {
+            previous_ai,
+            num_turns: num_turns - 1,
+        }
+    } else {
+        game.messages.add(
+            format!("The {} is no longer confused!", objects[monster_id].name),
+            RED,
+        );
+        *previous_ai
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Item {
     Heal,
     Lightning,
+    Confuse,
 }
 
 pub fn pick_item_up(object_id: usize, game: &mut Game, objects: &mut Vec<Object>) {
@@ -249,6 +271,14 @@ pub fn pick_item_up(object_id: usize, game: &mut Game, objects: &mut Vec<Object>
             .add(format!("You picked up a {}!", item.name), GREEN);
         game.inventory.push(item);
     }
+}
+
+pub fn drop_item(inventory_id: usize, game: &mut Game, objects: &mut Vec<Object>) {
+    let mut item = game.inventory.remove(inventory_id);
+    item.set_pos(objects[PLAYER].x, objects[PLAYER].y);
+    game.messages
+        .add(format!("You dropped a {}.", item.name), YELLOW);
+    objects.push(item);
 }
 
 pub fn inventory_menu(inventory: &[Object], header: &str, root: &mut Root) -> Option<usize> {
@@ -272,6 +302,7 @@ pub fn use_item(inventory_id: usize, tcod: &mut Tcod, game: &mut Game, objects: 
         let on_use = match item {
             Heal => cast_heal,
             Lightning => cast_lightning,
+            Confuse => cast_confuse,
         };
         match on_use(inventory_id, tcod, game, objects) {
             UseResult::UsedUp => {
@@ -313,7 +344,6 @@ fn cast_heal(
     }
     UseResult::Cancelled
 }
-
 fn cast_lightning(
     _inventory_id: usize,
     tcod: &mut Tcod,
@@ -331,6 +361,34 @@ fn cast_lightning(
             LIGHT_BLUE,
         );
         objects[monster_id].take_damage(LIGHTNING_DAMAGE, game);
+        UseResult::UsedUp
+    } else {
+        game.messages
+            .add("No enemy is close enough to strike.", RED);
+        UseResult::Cancelled
+    }
+}
+
+fn cast_confuse(
+    _inventory_id: usize,
+    tcod: &mut Tcod,
+    game: &mut Game,
+    objects: &mut [Object],
+) -> UseResult {
+    let monster_id = closest_monster(tcod, objects, CONFUSE_RANGE);
+    if let Some(monster_id) = monster_id {
+        let old_ai = objects[monster_id].ai.take().unwrap_or(Ai::Basic);
+        objects[monster_id].ai = Some(Ai::Confused {
+            previous_ai: Box::new(old_ai),
+            num_turns: CONFUSE_NUM_TURNS,
+        });
+        game.messages.add(
+            format!(
+                "The eyes of {} look vacant, as he starts to stumble around!",
+                objects[monster_id].name
+            ),
+            LIGHT_GREEN,
+        );
         UseResult::UsedUp
     } else {
         game.messages

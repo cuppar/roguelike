@@ -38,6 +38,25 @@ pub fn handle_keys(tcod: &mut Tcod, game: &mut Game, objects: &mut Vec<Object>) 
         (
             Key {
                 code: Char,
+                printable: 'f',
+                ..
+            },
+            _,
+            true,
+        ) => {
+            let item_id = inventory_menu(
+                &game.inventory,
+                "Press the key next to an item to drop it, or any other to cancel.\n'",
+                &mut tcod.root,
+            );
+            if let Some(item_id) = item_id {
+                drop_item(item_id, game, objects);
+            }
+            DidntTakeTurn
+        }
+        (
+            Key {
+                code: Char,
                 printable: 'i',
                 ..
             },
